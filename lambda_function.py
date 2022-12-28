@@ -1,6 +1,7 @@
 import datetime, http.client
 import xml.etree.ElementTree as ET
 from zoneinfo import ZoneInfo
+import boto3
 
 def lambda_handler(event, context):
     today = datetime.date.today()
@@ -58,10 +59,44 @@ def lambda_handler(event, context):
             pointtime = starttime + (resolution*index)
             pointtime = pointtime.replace(tzinfo=datetime.timezone.utc)
             pointlist.append((price, pointtime))
+            
+    aika = pointlist[0][1].astimezone(ZoneInfo("Europe/Helsinki"))
+    aikastr = aika.strftime("%d.%m.%Y %H.%M")
+    message = "Tukkusähkön tuntihinnat snt/kWh (alv 0%) halvimmasta kalleimpaan alkaen " + aikastr + "\n"
            
     sortedpointlist = sorted(pointlist, key=lambda price: price[0])
     for index in range(len(sortedpointlist)):
         hinta =  round(sortedpointlist[index][0]*10)/100
         aika = sortedpointlist[index][1].astimezone(ZoneInfo("Europe/Helsinki"))
         aikastr = aika.strftime("%d.%m.%Y %H.%M")
-        print ("Hinta snt/kWh:", hinta, "Aika:", aikastr)
+        #print ("Hinta snt/kWh:", hinta, "Aika:", aikastr)
+        message += aikastr + " " + f'{hinta:.2f}' + "\n"
+        
+    #print (message)
+    emailclient = boto3.client("ses")
+    
+    response = emailclient.send_email(
+        Source = "xxxxxxxxxxxxx",
+        Destination =
+        {
+            "ToAddresses" :
+            [
+                "xxxxxxxxxxxxxxxx",
+                "xxxxxxxxxxxxxxxx",
+            ]
+        },
+        Message =
+        {
+            "Subject":
+            {
+                "Data" : "Huomisen sähkön tuntihinnat"
+            },
+            "Body":
+            {
+                "Text":
+                {
+                    "Data": message
+                }
+            }
+        }
+    )
